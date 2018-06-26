@@ -32,7 +32,7 @@ class Child : Component
 ```
 
 实际应用比如（java.io.InputStream）
-
+![]https://camo.githubusercontent.com/097b63fca6d99ada8a9b2f0aa9ad1304dd5a8ca0/68747470733a2f2f696d672d626c6f672e6373646e2e6e65742f3230313631303130313131373037393233
 ```java
 public static void main(String[] args) throws FileNotFoundException {
     InputStream a = new FileInputStream("") ;//要装饰FileInputStream
