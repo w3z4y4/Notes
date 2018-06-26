@@ -45,3 +45,6 @@ public static void main(String[] args) throws FileNotFoundException {
 https://blog.csdn.net/alreadyfor/article/details/52776464
 
 https://blog.csdn.net/gscienty/article/details/43002635
+
+## 观察者模式（Java设计模式）---20180626
+
