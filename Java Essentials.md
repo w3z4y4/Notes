@@ -1,4 +1,4 @@
-### （Java设计模式）装饰者模式---20180626
+## （Java设计模式）装饰者模式---20180626
 父类和子类继承自同一接口，父对象通过构造函数传递给子类，子类动态扩展父对象的方法。
 示例：
 ```java
@@ -41,6 +41,7 @@ public static void main(String[] args) throws FileNotFoundException {
 }
 ```
 参考：
+
 https://blog.csdn.net/alreadyfor/article/details/52776464
 
 https://blog.csdn.net/gscienty/article/details/43002635
