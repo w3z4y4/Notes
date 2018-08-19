@@ -198,3 +198,6 @@ class StaticBlock {
 }
 ```
 在这段代码中，对e的声明被放到static块后面，于是，e会先被初始化为10，再被初始化为5，所以这段代码中e会输出为5。  
+
+双亲委派模型
+https://blog.csdn.net/mooneal/article/details/78397751
