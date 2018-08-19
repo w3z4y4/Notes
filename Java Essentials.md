@@ -203,4 +203,5 @@ class StaticBlock {
 https://blog.csdn.net/mooneal/article/details/78397751
 http://www.importnew.com/23742.html
 https://gitbook.cn/gitchat/activity/5a751b1391d6b7067048a213
+https://www.cnblogs.com/bekeyuan123/p/7468845.html
 http://ifeve.com/jvm-classloader/
