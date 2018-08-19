@@ -115,9 +115,86 @@ Test.a=b;
 除了上面几种方式会自动初始化一个类，其他访问类的方式都称不会触发类的初始化，称为被动引用。  
 类与接口的初始化不同，如果一个类被初始化，则其父类或父接口也会被初始化，但如果一个接口初始化，则不会引起其父接口的初始化。  
 
-初始化的步骤
+初始化的步骤  
 1、如果该类还没有加载和连接，则程序先加载该类并连接。  
 2、如果该类的直接父类没有加载，则先初始化其直接父类。  
 3、如果类中有初始化语句，则系统依次执行这些初始化语句。  
 在第二个步骤中，如果直接父类又有直接父类，则系统会再次重复这三个步骤来初始化这个父类，依次类推，JVM最先初始化的总是java.lang.Object类。当程序主动使用任何一个类时，系统会保证该类以及所有的父类都会被初始化。
 
+static块的本质。注意下面的代码：
+```java
+class StaticBlock {
+        static final int c = 3;
+
+        static final int d;
+
+        static int e = 5;
+        static {
+                d = 5;
+                e = 10;
+                System.out.println("Initializing");
+        }
+
+        StaticBlock() {
+                System.out.println("Building");
+        }
+}
+
+public class StaticBlockTest {
+        public static void main(String[] args) {
+                System.out.println(StaticBlock.c);
+                System.out.println(StaticBlock.d);
+                System.out.println(StaticBlock.e);
+        }
+}
+```
+这段代码的输出是什么呢？Initialing在c、d、e之前输出，还是在之后？e输出的是5还是10？  
+执行一下，结果为：  
+3  
+Initializing  
+5  
+10  
+答案是3最先输出，Intializing随后输出，e输出的是10，为什么呢？  
+原因是这样的：输出c时，由于c是编译时常量，不会引起类初始化，因此直接输出，输出d时，d不是编译时常量，所以会引起初始化操作，即static块的执行，于是d被赋值为5，e被赋值为10，然后输出Initializing，之后输出d为5，e为10。  
+但e为什么是10呢？原来，JDK会自动为e的初始化创建一个static块（参考：http://www.java3z.com/cwbwebhome/article/article8/81101.html?id=2497），所以上面的代码等价于：
+```java
+class StaticBlock {
+        static final int d;
+
+        static int e;
+        
+        static {
+           e=5; 
+        }
+
+        static {
+            d = 5;
+            e = 10;
+            System.out.println("Initializing");
+        }
+
+        StaticBlock() {
+            System.out.println("Building");
+        }
+}    
+```
+可见，按顺序执行，e先被初始化为5，再被初始化为10，于是输出了10。  
+类似的，容易想到下面的代码：  
+```java
+class StaticBlock {
+        static {
+                d = 5;
+                e = 10;
+                System.out.println("Initializing");
+        }
+
+        static final int d;
+
+        static int e = 5;
+
+        StaticBlock() {
+                System.out.println("Building");
+        }
+}
+```
+在这段代码中，对e的声明被放到static块后面，于是，e会先被初始化为10，再被初始化为5，所以这段代码中e会输出为5。  
