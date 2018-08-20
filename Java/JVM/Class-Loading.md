@@ -198,9 +198,18 @@ protected Class<?> loadClass(String name, boolean resolve)
 
 Java语言系统自带有三个类加载器:
 * Bootstrap ClassLoader 
-最顶层的加载类，主要加载核心类库，%JRE_HOME%\lib下的rt.jar、resources.jar、charsets.jar和class等。另外需要注意的是可以通过启动jvm时指定-Xbootclasspath和路径来改变BootstrapClassLoader的加载目录。比如java -Xbootclasspath/a:path被指定的文件追加到默认的bootstrap路径中。我们可以打开我的电脑，在上面的目录下查看，看看这些jar包是不是存在于这个目录。  
+最顶层的加载类，主要加载核心类库，%JRE_HOME%\lib下的rt.jar、resources.jar、charsets.jar和class等。（所有的java.XXX开头的类均被Bootstrap ClassLoader加载，启动类加载器是无法被Java程序直接引用的。）另外需要注意的是可以通过启动jvm时指定-Xbootclasspath和路径来改变BootstrapClassLoader的加载目录。比如java -Xbootclasspath/a:path被指定的文件追加到默认的bootstrap路径中。我们可以打开我的电脑，在上面的目录下查看，看看这些jar包是不是存在于这个目录。  
 * ExtentionClassLoader 扩展的类加载器，加载目录%JRE_HOME%\lib\ext目录下的jar包和class文件。还可以加载-D java.ext.dirs选项指定的目录。  
 * AppclassLoader也称为SystemAppClass 加载当前应用的classpath的所有类。  
+
+应用程序都是由这三种类加载器互相配合进行加载的，如果有必要，我们还可以加入自定义的类加载器。因为JVM自带的ClassLoader只是懂得从本地文件系统加载标准的java class文件，因此如果编写了自己的ClassLoader，便可以做到如下几点：
+
+1）在执行非置信代码之前，自动验证数字签名。
+
+2）动态地创建符合用户特定需要的定制化构建类。
+
+3）从特定的场所取得java class，例如数据库中和网络中。
+
 这三个加载器都是jvm通过一个Launcher类来初始化创造的，来看一下jvm是怎么加载它们的：   
 <img width="300" alt="20171030201134651" src="https://user-images.githubusercontent.com/6982311/44326028-fd7cee80-a48c-11e8-9bb0-1e7054034c71.png">
 有兴趣的可以查看Launcher的源码，三个类加载器的创建分别在这相应的三个内部类中。这里简单说一下，并介绍类加载器的继承体系和父子体系。创建AppclassLoader: 
@@ -257,6 +266,14 @@ private final ClassLoader parent;
 
 ### 双亲委派模型
 ![20170211135054825](https://user-images.githubusercontent.com/6982311/44326722-24d4bb00-a48f-11e8-9d56-d581496e56c9.png)
+JVM类加载机制
+
+* 全盘负责，当一个类加载器负责加载某个Class时，该Class所依赖的和引用的其他Class也将由该类加载器负责载入，除非显示使用另外一个类加载器来载入
+
+* 父类委托，先让父类加载器试图加载该类，只有在父类加载器无法加载该类时才尝试从自己的类路径中加载该类
+
+* 缓存机制，缓存机制将会保证所有加载过的Class都会被缓存，当程序中需要使用某个Class时，类加载器先从缓存区寻找该Class，只有缓存区不存在，系统才会读取该类对应的二进制数据，并将其转换成Class对象，存入缓存区。这就是为什么修改了Class后，必须重启JVM，程序的修改才会生效  
+
 在对这个图回头看代码1，结合下面的例子来理解. 
 这里有一个Hello.java
 ```java
@@ -271,6 +288,128 @@ public Class Hello {
 
 * 通过AppclassLoader来加载，因为它是当前应用下的classpath下的类的的加载器（默认没有使用自定义加载器），在运行到AppclassLoader的loadClass()方法时,根据代码1的分析，它要去它的父加载器ExtentionClassLoader中的loadClass()方法中去，同样在执行过程中，也要去父加载器中。
 
+#### Class.forName()和ClassLoader.loadClass()区别
+```java
+package com.neo.classloader;
+public class loaderTest { 
+        public static void main(String[] args) throws ClassNotFoundException { 
+                ClassLoader loader = HelloWorld.class.getClassLoader(); 
+                System.out.println(loader); 
+                //使用ClassLoader.loadClass()来加载类，不会执行初始化块 
+                loader.loadClass("Test2"); 
+                //使用Class.forName()来加载类，默认会执行初始化块 
+//                Class.forName("Test2"); 
+                //使用Class.forName()来加载类，并指定ClassLoader，初始化时不执行静态块 
+//                Class.forName("Test2", false, loader); 
+        } 
+}
+
+public class Test2 { 
+        static { 
+                System.out.println("静态初始化块执行了！"); 
+        } 
+}
+```
+Class.forName()：将类的.class文件加载到jvm中之外，还会对类进行解释，执行类中的static块；
+
+ClassLoader.loadClass()：只干一件事情，就是将.class文件加载到jvm中，不会执行static中的内容,只有在newInstance才会去执行static块。
+
+注：
+
+Class.forName(name, initialize, loader)带参函数也可控制是否加载static块。并且只有调用了newInstance()方法调用构造函数，创建类的对象 。
+
+#### ClassNotFoundException
+1、当AppClassLoader加载一个class时，它首先不会自己去尝试加载这个类，而是把类加载请求委派给父类加载器ExtClassLoader去完成。
+
+2、当ExtClassLoader加载一个class时，它首先也不会自己去尝试加载这个类，而是把类加载请求委派给BootStrapClassLoader去完成。
+
+3、如果BootStrapClassLoader加载失败（例如在$JAVA_HOME/jre/lib里未查找到该class），会使用ExtClassLoader来尝试加载；
+
+4、若ExtClassLoader也加载失败，则会使用AppClassLoader来加载，如果AppClassLoader也加载失败，则会报出异常ClassNotFoundException。
+
+### 自定义类加载器
+通常情况下，我们都是直接使用系统类加载器。但是，有的时候，我们也需要自定义类加载器。比如应用是通过网络来传输 Java 类的字节码，为保证安全性，这些字节码经过了加密处理，这时系统类加载器就无法对其进行加载，这样则需要自定义类加载器来实现。自定义类加载器一般都是继承自 ClassLoader 类，从上面对 loadClass 方法来分析来看，我们只需要重写 findClass 方法即可。下面我们通过一个示例来演示自定义类加载器的流程：
+
+```java
+package com.neo.classloader;
+ 
+import java.io.*;
+ 
+public class MyClassLoader extends ClassLoader {
+ 
+    private String root;
+ 
+    protected Class<?> findClass(String name) throws ClassNotFoundException {
+        byte[] classData = loadClassData(name);
+        if (classData == null) {
+            throw new ClassNotFoundException();
+        } else {
+            return defineClass(name, classData, 0, classData.length);
+        }
+    }
+ 
+    private byte[] loadClassData(String className) {
+        String fileName = root + File.separatorChar
+                + className.replace('.', File.separatorChar) + ".class";
+        try {
+            InputStream ins = new FileInputStream(fileName);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            int bufferSize = 1024;
+            byte[] buffer = new byte[bufferSize];
+            int length = 0;
+            while ((length = ins.read(buffer)) != -1) {
+                baos.write(buffer, 0, length);
+            }
+            return baos.toByteArray();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+ 
+    public String getRoot() {
+        return root;
+    }
+ 
+    public void setRoot(String root) {
+        this.root = root;
+    }
+ 
+    public static void main(String[] args)  {
+ 
+        MyClassLoader classLoader = new MyClassLoader();
+        classLoader.setRoot("E:\\temp");
+ 
+        Class<?> testClass = null;
+        try {
+            testClass = classLoader.loadClass("com.neo.classloader.Test2");
+            Object object = testClass.newInstance();
+            System.out.println(object.getClass().getClassLoader());
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        } catch (InstantiationException e) {
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+自定义类加载器的核心在于对字节码文件的获取，如果是加密的字节码则需要在该类中对文件进行解密。由于这里只是演示，我并未对class文件进行加密，因此没有解密的过程。这里有几点需要注意：
+
+1、这里传递的文件名需要是类的全限定性名称，即com.paddx.test.classloading.Test格式的，因为 defineClass 方法是按这种格式进行处理的。
+
+2、最好不要重写loadClass方法，因为这样容易破坏双亲委托模式。
+
+3、这类Test 类本身可以被 AppClassLoader 类加载，因此我们不能把 com/paddx/test/classloading/Test.class 放在类路径下。否则，由于双亲委托机制的存在，会直接导致该类由AppClassLoader 加载，而不会通过我们自定义类加载器来加载。
+
 ### 参考文章
 https://blog.csdn.net/mooneal/article/details/78397751
+http://www.importnew.com/23742.html
 
+### 疑问
+https://gitbook.cn/gitchat/activity/5a751b1391d6b7067048a213
+
+* 与线程相关类加载器
+* Tomcat 框架中多级类加载器的实现原理
+* 如何使用类加载器实现简单的模块间隔离
