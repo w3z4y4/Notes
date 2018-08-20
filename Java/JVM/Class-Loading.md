@@ -1,12 +1,12 @@
 ## Java类加载机制---20180819
-JAVA源码编译由三个过程组成：
-1、源码编译机制。
-2、类加载机制
-3、类执行机制
-我们这里主要介绍编译和类加载这两种机制。
+JAVA源码编译由三个过程组成：  
+1、源码编译机制    
+2、类加载机制   
+3、类执行机制  
+我们这里主要介绍编译和类加载这两种机制。  
 
 ### 源码编译
-代码编译由JAVA源码编译器来完成。主要是将源码编译成字节码文件（class文件）。字节码文件格式主要分为两部分：常量池和方法字节码。
+代码编译由JAVA源码编译器来完成。主要是将源码编译成字节码文件（class文件）。字节码文件格式主要分为两部分：常量池和方法字节码。  
 ### 类加载
 类的生命周期是从被加载到虚拟机内存中开始，到卸载出内存结束。过程共有七个阶段，其中到初始化之前的都是属于类加载的部分。  
 加载----验证----准备----解析-----初始化----使用-----卸载  
@@ -104,7 +104,7 @@ Initializing
 10  
 答案是3最先输出，Intializing随后输出，e输出的是10，为什么呢？  
 原因是这样的：输出c时，由于c是编译时常量，不会引起类初始化，因此直接输出，输出d时，d不是编译时常量，所以会引起初始化操作，即static块的执行，于是d被赋值为5，e被赋值为10，然后输出Initializing，之后输出d为5，e为10。  
-但e为什么是10呢？原来，JDK会自动为e的初始化创建一个static块（参考：http://www.java3z.com/cwbwebhome/article/article8/81101.html?id=2497），所以上面的代码等价于：
+但e为什么是10呢？原来，JDK会自动为e的初始化创建一个static块，所以上面的代码等价于：
 ```java
 class StaticBlock {
         static final int d;
@@ -147,9 +147,63 @@ class StaticBlock {
 ```
 在这段代码中，对e的声明被放到static块后面，于是，e会先被初始化为10，再被初始化为5，所以这段代码中e会输出为5。  
 
+### 类加载器
+在java.lang包中有一个抽象类，名为 ClassLoader ,这个类是所有类加载器的超类。这个类中有这几个重要方法：  
+getParent() 返回该类加载器的父类加载器。  
+loadClass(String name) 加载名称为name的类，返回的结果是 java.lang.Class类的实例。  
+findClass(String name) 查找名称为name的类，返回的结果是 java.lang.Class类的实例。  
+findLoadedClass(String name) 查找名称为name的已经被加载过的类，返回的结果是java.lang.Class类的实例。  
+defineClass(String name, byte[] b, int off, int len) 把字节数组 b中的内容转换成Java 类，返回的结果是 java.lang.Class类的实例。这个方法被声明为 final的。  
+resolveClass(Class c) 链接指定的 Java 类。  
+从上面的说明可以看出来ClassLoader通过loadClass()方法来加载字节码文件，然后返回一个字节码对象。来看一下源码：
+```java
+protected Class<?> loadClass(String name, boolean resolve)
+        throws ClassNotFoundException
+    {
+        synchronized (getClassLoadingLock(name)) {
+        /*首先通过findLoadedClass方法检查这个类是否被加载，过程是去元空间中查看是否有当前类的信息，是否被加载需要检查 包名+类名+类加载器的id*/
+            Class<?> c = findLoadedClass(name);
+            if (c == null) {
+                long t0 = System.nanoTime();
+                try {
+                /*双亲委派模型，后面细讲*/
+                    if (parent != null) {
+                    /*如果没有被加载，就调用它的父加载器去加载*/
+                        c = parent.loadClass(name, false);
+                    } else {
+                    /*一直向上委派到bootStrap类加载器*/
+                        c = findBootstrapClassOrNull(name);
+                    }
+                } catch (ClassNotFoundException e) {
+                    // ClassNotFoundException thrown if class not found
+                    // from the non-null parent class loader
+                }
+
+                if (c == null) {
+                    // If still not found, then invoke findClass in order
+/*查找这个类是否能被这个类加载器加载，不能的话就返回null，回到它的子加载器，递归回来，查看子加载器是否能被加载*/
+                    long t1 = System.nanoTime();
+                    c = findClass(name);
+。。。。
+                }
+            }
+            if (resolve) {
+            /*如果这个类加载了，那么就链接它*/
+                resolveClass(c);
+            }
+            return c;
+        }
+    }
+```
+
+Java语言系统自带有三个类加载器:
+* Bootstrap ClassLoader 
+最顶层的加载类，主要加载核心类库，%JRE_HOME%\lib下的rt.jar、resources.jar、charsets.jar和class等。另外需要注意的是可以通过启动jvm时指定-Xbootclasspath和路径来改变BootstrapClassLoader的加载目录。比如java -Xbootclasspath/a:path被指定的文件追加到默认的bootstrap路径中。我们可以打开我的电脑，在上面的目录下查看，看看这些jar包是不是存在于这个目录。  
+* ExtentionClassLoader 扩展的类加载器，加载目录%JRE_HOME%\lib\ext目录下的jar包和class文件。还可以加载-D java.ext.dirs选项指定的目录。  
+* AppclassLoader也称为SystemAppClass 加载当前应用的classpath的所有类。  
+这三个加载器都是jvm通过一个Launcher类来初始化创造的，来看一下jvm是怎么加载它们的：   
+
+有兴趣的可以查看Launcher的源码，三个类加载器的创建分别在这相应的三个内部类中。这里简单说一下，并介绍类加载器的继承体系和父子体系。  
+
 双亲委派模型
-https://blog.csdn.net/mooneal/article/details/78397751
-http://www.importnew.com/23742.html
-https://gitbook.cn/gitchat/activity/5a751b1391d6b7067048a213
-https://www.cnblogs.com/bekeyuan123/p/7468845.html
-http://ifeve.com/jvm-classloader/
+
