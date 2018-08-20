@@ -202,8 +202,57 @@ Java语言系统自带有三个类加载器:
 * ExtentionClassLoader 扩展的类加载器，加载目录%JRE_HOME%\lib\ext目录下的jar包和class文件。还可以加载-D java.ext.dirs选项指定的目录。  
 * AppclassLoader也称为SystemAppClass 加载当前应用的classpath的所有类。  
 这三个加载器都是jvm通过一个Launcher类来初始化创造的，来看一下jvm是怎么加载它们的：   
-<img width="666" alt="20171030201134651" src="https://user-images.githubusercontent.com/6982311/44326028-fd7cee80-a48c-11e8-9bb0-1e7054034c71.png">
-有兴趣的可以查看Launcher的源码，三个类加载器的创建分别在这相应的三个内部类中。这里简单说一下，并介绍类加载器的继承体系和父子体系。  
+<img width="300" alt="20171030201134651" src="https://user-images.githubusercontent.com/6982311/44326028-fd7cee80-a48c-11e8-9bb0-1e7054034c71.png">
+有兴趣的可以查看Launcher的源码，三个类加载器的创建分别在这相应的三个内部类中。这里简单说一下，并介绍类加载器的继承体系和父子体系。创建AppclassLoader: 
+```java
+/*静态内部类继承了URLClassLoader*/
+ static class AppClassLoader extends URLClassLoader {
+        final URLClassPath ucp = SharedSecrets.getJavaNetAccess().getURLClassPath(this);
 
-双亲委派模型
+        public static ClassLoader getAppClassLoader(final ClassLoader var0) throws IOException {
+        /*得到classpath下的所有类的路径*/
+            final String var1 = System.getProperty("java.class.path");
+            final File[] var2 = var1 == null?new File[0]:Launcher.getClassPath(var1);
+            return (ClassLoader)AccessController.doPrivileged(new PrivilegedAction<Launcher.AppClassLoader>() {
+                public Launcher.AppClassLoader run() {
+                    URL[] var1x = var1 == null?new URL[0]:Launcher.pathToURLs(var2);
+    /*这里创建AppClassLoader，注意这里并没有去加载路径下的类*/
+                    return new Launcher.AppClassLoader(var1x, var0);
+                }
+            });
+        }
+```
+ExtentionClassLoader 类似于这种方式去创建，那BootStrapClassLoader是怎么创建的呢？ 其实java中并没有这个类，只是一个概念，它嵌入到jvm中了，由c++编写的。也就是jvm一启动就会有这个类，但是在Launcher类中规定了它加载类所在的路径：
+```java
+ private static String bootClassPath = System.getProperty("sun.boot.class.path");
+```
+从上面的代码也看到了 AppclassLoader 继承的是URLClassLoader,但它的父加载器却是ExtentionClassLoader ，采用这种方式是有两个方面：
+
+* 继承URLClassLoader,是为了继承这个类中的findClass()方法为了找到规定路径下的类。继续看URLClassLoader的源码：
+```java
+protected Class<?> findClass(final String name)
+        throws ClassNotFoundException
+    {
+        。。。。
+                    public Class<?> run() throws ClassNotFoundException {
+                    /*解析类的路径*/
+                        String path = name.replace('.', '/').concat(".class");
+                        Resource res = ucp.getResource(path, false);
+                        if (res != null) {
+                            try {
+           /*通过字节码文件的路径获得相应的Class类*/
+                                return defineClass(name, res);
+                            } 
+        。。。。。
+        return result;
+    }
+```
+前面有个问题是只是找到字节码文件，并没有加载它，答案就在这里，通过defineClass(name, res)来加载它。这里又引出一个问题，为什么不在loadClass()中加载它，而是通过findClass()来加载？继续留问题，后面讲。  
+* 所有类加载器中的基类ClassLoader中有一个属性。  
+```java
+private final ClassLoader parent;
+```
+是通过类与类组合的方式来定义一个父加载器的，为了构成双亲委派模型。
+
+### 双亲委派模型
 
