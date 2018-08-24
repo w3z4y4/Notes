@@ -436,6 +436,53 @@ public class MyClassLoader extends ClassLoader {
 
 3、这类Test 类本身可以被 AppClassLoader 类加载，因此我们不能把 com/paddx/test/classloading/Test.class 放在类路径下。否则，由于双亲委托机制的存在，会直接导致该类由AppClassLoader 加载，而不会通过我们自定义类加载器来加载。
 
+### 题目
+```java
+class SingleTon {
+	private static SingleTon singleTon = new SingleTon();
+	public static int count1;
+	public static int count2 = 0;
+ 
+	private SingleTon() {
+		count1++;
+		count2++;
+	}
+ 
+	public static SingleTon getInstance() {
+		return singleTon;
+	}
+}
+ 
+public class Test {
+	public static void main(String[] args) {
+		SingleTon singleTon = SingleTon.getInstance();
+		System.out.println("count1=" + singleTon.count1);
+		System.out.println("count2=" + singleTon.count2);
+	}
+
+```
+错误答案:
+
+count1=1
+count2=1
+
+正确答案:
+
+
+
+
+
+count1=1
+count2=0
+
+为什么呢？
+
+1:SingleTon singleTon = SingleTon.getInstance();调用了类的SingleTon调用了类的静态方法，触发类的初始化。  
+2:类加载的时候在准备过程中为类的静态变量分配内存并初始化默认值 singleton=null count1=0,count2=0。  
+3:类初始化，为类的静态变量赋值和执行静态代码快。singleton赋值为new SingleTon()调用类的构造方法。  
+4:调用类的构造方法后count=1;count2=1。  
+5:继续为count1与count2赋值,此时count1没有赋值操作,所以count1为1,但是count2执行赋值操作就变为0。  
+
 ### 参考文章
 https://blog.csdn.net/mooneal/article/details/78397751
 
