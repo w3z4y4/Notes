@@ -349,7 +349,7 @@ ClassLoader.loadClass()：只干一件事情，就是将.class文件加载到jvm
 
 注：
 
-Class.forName(name, initialize, loader)带参函数也可控制是否加载static块。并且只有调用了newInstance()方法调用构造函数，创建类的对象 。
+Class.forName(name, initialize, loader)带参函数也可控制是否加载static块。并且只有调用了newInstance()方法调用构造函数，才创建类的对象 。
 
 #### ClassNotFoundException
 1、当AppClassLoader加载一个class时，它首先不会自己去尝试加载这个类，而是把类加载请求委派给父类加载器ExtClassLoader去完成。
@@ -359,6 +359,12 @@ Class.forName(name, initialize, loader)带参函数也可控制是否加载stati
 3、如果BootStrapClassLoader加载失败（例如在$JAVA_HOME/jre/lib里未查找到该class），会使用ExtClassLoader来尝试加载；
 
 4、若ExtClassLoader也加载失败，则会使用AppClassLoader来加载，如果AppClassLoader也加载失败，则会报出异常ClassNotFoundException。
+
+### 双亲委派模型是不可改变的吗？
+
+首先，明确双亲委派模型是一种规范，在自定义类加载器的时候完全可以重写loadClass()方法中的逻辑。这里回答一下前面的问题，为什么不用loadClass()实现类加载的功能，而是用findClass()。这是为了把委派模型的逻辑和类加载器要实现的逻辑分离开了。所以一般自定义类加载器loadClass()一般不动，而是重写findClass()。 
+
+### 什么时候要破坏委派模型呢？
 
 ### 自定义类加载器
 通常情况下，我们都是直接使用系统类加载器。但是，有的时候，我们也需要自定义类加载器。比如应用是通过网络来传输 Java 类的字节码，为保证安全性，这些字节码经过了加密处理，这时系统类加载器就无法对其进行加载，这样则需要自定义类加载器来实现。自定义类加载器一般都是继承自 ClassLoader 类，从上面对 loadClass 方法来分析来看，我们只需要重写 findClass 方法即可。下面我们通过一个示例来演示自定义类加载器的流程：
@@ -468,9 +474,9 @@ count2=1
 
 正确答案:
 
-
-
-
+.
+.
+.
 
 count1=1
 count2=0
