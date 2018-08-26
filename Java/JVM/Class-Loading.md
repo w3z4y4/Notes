@@ -365,6 +365,245 @@ Class.forName(name, initialize, loader)带参函数也可控制是否加载stati
 首先，明确双亲委派模型是一种规范，在自定义类加载器的时候完全可以重写loadClass()方法中的逻辑。这里回答一下前面的问题，为什么不用loadClass()实现类加载的功能，而是用findClass()。这是为了把委派模型的逻辑和类加载器要实现的逻辑分离开了。所以一般自定义类加载器loadClass()一般不动，而是重写findClass()。 
 
 ### 什么时候要破坏委派模型呢？
+#### jdbc驱动的类加载
+一句话概括：Java 提供了很多服务提供者接口（Service Provider Interface，SPI），允许第三方为这些接口提供实现。常见的 SPI 有 JDBC、JCE、JNDI、JAXP 和 JBI 等。
+这些 SPI 的接口由 Java 核心库来提供，而这些 SPI 的实现代码则是作为 Java 应用所依赖的 jar 包被包含进类路径（CLASSPATH）里。SPI接口中的代码经常需要加载具体的实现类。那么问题来了，SPI的接口是Java核心库的一部分，是由启动类加载器(Bootstrap Classloader)来加载的；SPI的实现类是由系统类加载器(System ClassLoader)来加载的。引导类加载器是无法找到 SPI 的实现类的，因为依照双亲委派模型，BootstrapClassloader无法委派AppClassLoader来加载类。
+而线程上下文类加载器破坏了“双亲委派模型”，可以在执行线程中抛弃双亲委派加载链模式，使程序可以逆向使用类加载器。
+
+先来看平时是如何使用mysql获取数据库连接的：
+```java
+// 加载Class到AppClassLoader（系统类加载器），然后注册驱动类
+// Class.forName("com.mysql.jdbc.Driver"); 
+String url = "jdbc:mysql://localhost:3306/testdb";    
+// 通过java库获取数据库连接
+Connection conn = java.sql.DriverManager.getConnection(url, "name", "password"); 
+```
+
+两个疑问：传统写法为什么要写Class.forName("com.mysql.jdbc.Driver");？为什么要通过DriverManager去获取连接，为什么不用Driver的实例获取？
+
+第一个问题分析：
+
+先看传统写法，com.mysql.jdbc.Driver 类的源码：
+```java
+public class Driver extends NonRegisteringDriver implements java.sql.Driver {
+      //
+      // Register ourselves with the DriverManager
+      //
+      static {
+          try {
+              java.sql.DriverManager.registerDriver(new Driver());
+          } catch (SQLException E) {
+              throw new RuntimeException("Can't register driver!");
+         }
+     }
+ 
+     /**
+      * Construct a new driver and register it with DriverManager
+      * 
+      * @throws SQLException
+      *             if a database error occurs.
+      */
+     public Driver() throws SQLException {
+         // Required for Class.forName().newInstance()
+     }
+ }
+```
+static语句做了一件事：生成驱动实例，并向DriverManager注册。所谓注册，就是将driver的信息保存起来，以便后来取用。第一个问题解决。
+
+```java
+public static Connection getConnection(String url,
+          String user, String password) throws SQLException {
+          java.util.Properties info = new java.util.Properties();
+  
+          if (user != null) {
+              info.put("user", user);
+          }
+          if (password != null) {
+              info.put("password", password);
+         }
+ 
+         return (getConnection(url, info, Reflection.getCallerClass()));
+     }
+     
+private static Connection getConnection(
+         String url, java.util.Properties info, Class<?> caller) throws SQLException {
+         /*
+          * When callerCl is null, we should check the application's
+          * (which is invoking this class indirectly)
+          * classloader, so that the JDBC driver class outside rt.jar
+          * can be loaded from here.
+          */
+         ClassLoader callerCL = caller != null ? caller.getClassLoader() : null;
+         synchronized(DriverManager.class) {
+             // synchronize loading of the correct classloader.
+             if (callerCL == null) {
+                 callerCL = Thread.currentThread().getContextClassLoader();
+             }
+         }
+ 
+         if(url == null) {
+             throw new SQLException("The url cannot be null", "08001");
+         }
+ 
+         println("DriverManager.getConnection(\"" + url + "\")");
+ 
+         // Walk through the loaded registeredDrivers attempting to make a connection.
+         // Remember the first exception that gets raised so we can reraise it.
+         SQLException reason = null;
+ 
+         for(DriverInfo aDriver : registeredDrivers) {
+             // If the caller does not have permission to load the driver then
+             // skip it.
+             if(isDriverAllowed(aDriver.driver, callerCL)) {
+                 try {
+                     println("    trying " + aDriver.driver.getClass().getName());
+                     Connection con = aDriver.driver.connect(url, info);
+                     if (con != null) {
+                         // Success!
+                         println("getConnection returning " + aDriver.driver.getClass().getName());
+                         return (con);
+                     }
+                 } catch (SQLException ex) {
+                     if (reason == null) {
+                         reason = ex;
+                     }
+                 }
+ 
+             } else {
+                 println("    skipping: " + aDriver.getClass().getName());
+             }
+ 
+         }
+ 
+         // if we got here nobody could connect.
+         if (reason != null)    {
+             println("getConnection failed: " + reason);
+             throw reason;
+         }
+ 
+         println("getConnection: no suitable driver found for "+ url);
+         throw new SQLException("No suitable driver found for "+ url, "08001");
+     }
+```
+Reflection.getCallerClass()是一个native方法，返回调用的类，这里是DriverManager。什么是native方法暂且不提，题外话：从 jdk 7u40 开始，Oracle 已经弃用了 sun.reflect.package 包里不易理解的 Reflection.getCallerClass（int）方法。在 Java 7 中，通过设置 Java 命令行选项 Djdk.reflect.allowGetCallerClass，可以继续使用该方法。但在 Java 8 及以后的版本中，该方法将被彻底删除，调用它会导致 UnsupportedOperationException 异常。类似的， JDK8 中的 @java.lang.Class 的 forName(className) 方法也加了@Deprecated 这个注解，因为forName方法里面也调用给到了Reflection.getCallerClass()。Oracle建议开发人员不要使用sun包，但是有一系列的项目都依赖于getCallerClass()方法，如Jigsaw和Lambda，Intellij IDEA。在spring-loaded的源码这里也调用了getCallerClass()方法，作为临时的方案去兼容JDK 7u25，需要添加系统属性：jdk.reflect.allowGetCallerClass。
+
+caller.getClassLoader()获取DriverManager的类加载器是Bootstrap Classloader，无法获取，也就是null。因此通过Thread.currentThread().getContextClassLoader()获取线程上下文类加载器。查看Thread类的源码可以知道，Thread有一个私有变量：
+```java
+/* The context ClassLoader for this thread */
+    private ClassLoader contextClassLoader;
+```
+
+contextClassLoader由第一个线程的类加载器设置，即主线程main。那第一个启动的线程（包含main方法的那个线程）里面的contextClassLoader是谁设置的呢？？？
+
+这就要看 sun.misc.Launcher 这个类的源码。Launcher是JRE中用于启动程序入口main()的类。
+```java
+loader = AppClassLoader.getAppClassLoader(extcl);
+
+Thread.currentThread().setContextClassLoader(loader);
+```
+
+这里截取的两行代码出自 Launcher 的构造方法。第一行用一个扩展类加载器extcl构造了一个系统类加载器loader，第二行把loader设置为当前线程（包含main方法）的类加载器。所以，我们启动一个线程的时候，如果之前都没有调用 setContextClassLoader 方法明确指定的话，默认的就是系统类加载器。
+
+回到isDriverAllowed方法：
+```java
+private static boolean isDriverAllowed(Driver driver, ClassLoader classLoader) {
+    boolean result = false;
+    if(driver != null) {
+        Class<?> aClass = null;
+        try {
+        // 传入的classLoader为调用getConnetction的线程上下文类加载器，从中寻找driver的class对象
+            aClass =  Class.forName(driver.getClass().getName(), true, classLoader);
+        } catch (Exception ex) {
+            result = false;
+        }
+    // 注意，只有同一个类加载器中的Class使用==比较时才会相等，此处就是校验用户注册Driver时该Driver所属的类加载器与调用时的是否同一个
+    // driver.getClass()拿到就是当初执行Class.forName("com.mysql.jdbc.Driver")时的应用AppClassLoader
+        result = ( aClass == driver.getClass() ) ? true : false;
+    }
+
+    return result;
+}
+```
+
+可以看到这儿TCCL（ThreadContextClassLoader）的作用主要用于校验注册的driver是否属于调用线程的Classloader。例如tomcat多个webapp都有自己的Classloader，如果它们都自带 mysql-connect.jar包，那底层Classloader的DriverManager里将注册多个不同类加载器的Driver实例，想要区分只能靠TCCL了。
+
+
+回到DriverManager的getConnection 方法：
+```java
+for(DriverInfo aDriver : registeredDrivers) {
+            // If the caller does not have permission to load the driver then
+            // skip it.
+            if(isDriverAllowed(aDriver.driver, callerCL)) {
+                try {
+                    println("    trying " + aDriver.driver.getClass().getName());
+                    Connection con = aDriver.driver.connect(url, info);
+                    if (con != null) {
+                        // Success!
+                        println("getConnection returning " + aDriver.driver.getClass().getName());
+                        return (con);
+                    }
+                } catch (SQLException ex) {
+                    if (reason == null) {
+                        reason = ex;
+                    }
+                }
+
+            } else {
+                println("    skipping: " + aDriver.getClass().getName());
+            }
+
+        }
+```
+在getConection方法中，会不断尝试的connect方法中，传入的URL也将会被先判定是不是自己可接受的URL，然后再执行，各个厂商提供的驱动自己编写是否支持这个URL的代码。也就是说，当我们注册了多个数据库驱动，mysql，oracle等；DriverManager都帮我们管理了，它会取出一个符合条件的driver，就不用我们在程序里自己去控制了。这就是第二个问题的答案：DriverManager会帮你匹配注册的driver和URL，决定使用哪个驱动。
+
+#### JDBC4.0自动加载驱动器类
+从JDK1.6开始，Oracle就将修改了添加了新的加载JDBC驱动的方式。即JDBC4.0。在启动项目或是服务时，会判断当前classspath中的所的jar包，并检查META-INF目录下，是否包含services文件夹，如果包含，就会将里面的配置加载成相应的服务。
+
+如Oracle11g的ojdbc6.jar包：
+
+META-INF/services/jdbc.sql.Driver文件内容只有一行，即实现java.sql.Driver的类：
+oracle.jdbc.OracleDriver
+
+Oracle在随即发布的mysql-connector-java-5.1.8.jar中，也同样添加了上述的特性：
+里面的内容，也是一句，即：
+com.mysql.jdbc.Driver
+
+为了验证是否会自动加载数据库驱动类，我们书写一段Java代码：
+```java
+ public static void main(String[] args) throws Exception {
+         //从DriverManager中获取所有驱动类，遍历并输出
+         Enumeration<java.sql.Driver> en = DriverManager.getDrivers();
+         while(en.hasMoreElements()){
+             java.sql.Driver d = en.nextElement();
+             System.err.println(d.toString());
+         }
+ }
+```
+
+这就是为什么不用写Class.forName("com.mysql.jdbc.Driver")的原因。
+
+TCCL破坏了双亲委派模型，根据委派模型，A类中引用了B类
+```java
+public class A{
+    private B = new B();
+}
+```
+那么默认的B的加载器也是由A的加载器加载的！！ 
+
+所以通过DriverManager统一来得到Driver的话，那么BootStrapClassLoader默认是加载 java.sql 包下的Driver接口。但实际上必须要加载它的实现类。 
+可是，根据委派模型，父类加载器去调用子类加载器是不可能完成的，必须由BootStrapClassLoader来加载，这就难办了，BootStrapClassLoader说我的工作就是加载 %JRE_HOME%\lib 下的，要我加工作量，不干！！况且我也找不到在哪啊，我只知道它的接口啊，并不知道它的实现类。
+
+于是，出现了一个设计,在线程Tread类中内置一个
+```java
+/* The context ClassLoader for this thread 默认是appclassloader ，可以自己设置*/
+    private ClassLoader contextClassLoader;
+```
+
+因此在父类加载器需要调用子类加载器的时候，就可以通过
+```java
+Thread.currentThread().getContextClassLoader();
+```
+来获取想要的类加载器。 
 
 ### 自定义类加载器
 通常情况下，我们都是直接使用系统类加载器。但是，有的时候，我们也需要自定义类加载器。比如应用是通过网络来传输 Java 类的字节码，为保证安全性，这些字节码经过了加密处理，这时系统类加载器就无法对其进行加载，这样则需要自定义类加载器来实现。自定义类加载器一般都是继承自 ClassLoader 类，从上面对 loadClass 方法来分析来看，我们只需要重写 findClass 方法即可。下面我们通过一个示例来演示自定义类加载器的流程：
@@ -495,6 +734,10 @@ https://blog.csdn.net/mooneal/article/details/78397751
 http://www.importnew.com/23742.html
 
 https://www.cnblogs.com/dongguacai/p/5860241.html
+
+https://www.cnblogs.com/cz123/p/6867345.html
+
+http://www.importnew.com/16799.html
 
 ### 疑问
 https://gitbook.cn/gitchat/activity/5a751b1391d6b7067048a213
