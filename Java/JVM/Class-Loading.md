@@ -62,7 +62,8 @@ java类中对类变量指定初始值有两种方式：1、声明类变量时指
 new Test();
 ```
 
-2) 反射，没有创建实例
+2) 反射，没有创建实例。
+
 ```java
 Class.forName(“com.mengdd.Test”);
 ```
