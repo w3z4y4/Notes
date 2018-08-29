@@ -224,6 +224,8 @@ Java语言系统自带有三个类加载器:
 * ExtentionClassLoader 扩展的类加载器，加载目录%JRE_HOME%\lib\ext目录下的jar包和class文件。还可以加载-D java.ext.dirs选项指定的目录。  
 * AppclassLoader也称为SystemAppClass 加载当前应用的classpath的所有类。  
 
+每个Class Loader有自己的命名空间，命名空间由被此Class Loader加载的类组成，不同命名空间的两个类是相互不可见的。不过如果能得到（例如通过反射）另一命名空间中的类所对应的Class对象的引用，则还是可以访问该类的成员变量。
+
 应用程序都是由这三种类加载器互相配合进行加载的，如果有必要，我们还可以加入自定义的类加载器。因为JVM自带的ClassLoader只是懂得从本地文件系统加载标准的java class文件，因此如果编写了自己的ClassLoader，便可以做到如下几点：
 
 1）在执行非置信代码之前，自动验证数字签名。
@@ -688,6 +690,60 @@ Tomcat中当类发生改变时，监听器监听到触发StandardContext.reload(
 
 这是因为jdk1.6增加了agentmain方式，实现了运行时动态性（通过The Attach API 绑定到具体VM）。其基本实现是通过JVMTI的retransformClass/redefineClass进行method body级的字节码更新，ASM、CGLib之类基本都是围绕这些在做动态性。
 
+#### osgi的类加载
+OSGi（Open Service Gateway Initiative）：是OSGi联盟指定的一个基于Java语言的动态模块化规范，这个规范最初是由Sun、IBM、爱立信等公司联合发起，目的是使服务提供商通过住宅网管为各种家用智能设备提供各种服务，后来这个规范在Java的其他技术领域也有不错的发展，现在已经成为Java世界中的“事实上”的模块化标准，并且已经有了Equinox、Felix等成熟的实现。OSGi在Java程序员中最著名的应用案例就是Eclipse IDE。
+
+开发者们所开发的OSGi组件都称为Bundle，Bundle是一组Java包、类、描述文件等资源的集合，一般都以JAR格式进行封装。Java模块化不足问题的根源是那个全局的、扁平化的classpath；OSGi采取了一个完全不同的方法：每个模块都有自己独立的classpath。
+
+如何实现这一点呢？OSGi采取了不同的类加载机制：
+* OSGi为每个bundle提供一个类加载器，该加载器能够看到bundle Jar文件内部的类和资源；
+* 为了让bundle能互相协作，可以基于依赖关系，从一个bundle类加载器委托到另一个bundle类加载器。
+
+![20131006171453671](https://user-images.githubusercontent.com/6982311/44795399-2879e780-abdd-11e8-8c8e-3482e387366d.png)
+
+Java和J2EE的类加载模型都是层次化的，只能委托给上一层类加载器；
+而OSGi类加载模型则是网络图状的，可以在bundle间互相委托。——这样更合理，因为bundle间的依赖关系并不是层次化的。
+ 
+例如bundleA、B都依赖于bundleC，当他们访问bundleC中的类时，就会委托给bundleC的类加载器，由它来查找类；如果它发现还要依赖bundleE中的类，就会再委托给bundleE的类加载器。
+
+优点
+
+* 找不到类时的错误提示更友好。假如bundleE不存在，则bundleC就不会被解析成功，会有错误消息提示为何未能解析；而不是报错ClassNotFoundException或NoClassDefFoundError。
+* 效率更高。在标准Java类加载模型中，总是会在classpath那一长串列表中进行查找；而OSGi类加载器能立即知道去哪里找类。
+
+解决模块化问题
+
+1.OSGi可以帮助你先确保代码满足依赖关系，然后才允许执行代码；避免类路径错误
+2.OSGi会对类路径上的依赖集进行一致性检查（如：版本）；
+3.不必担心由于层次化的类加载模式隐含的限制；
+4.OSGi可以把程序打包逻辑上独立的JAR文件，并且只部署指定的部分、动态部署；——OSGi生命周期层实现动态部署
+5.OSGi可以声明JAR中的哪些代码可以被其他JAR访问，强化可见性； ——OSGi中，只有那些被显式导出的包才能被其他bundle使用。也就是说默认情况下，所有包都是bundle private的，不能被其他包看到。
+6.OSGi为程序定义了一个插件式的扩展机制。
+
+一个Bundle可以声明它所依赖的Java Package（通过Import-Package描述），也可以声明他允许导出发布的Java Package（通过Export-Package描述）。在OSGi里面，Bundle之间的依赖关系从传统的上层模块依赖底层模块转变为平级模块之间的依赖（至少外观上如此），而且类库的可见性能得到精确的控制，一个模块里只有被Export过的Package才可能由外界访问，其他的Package和Class将会隐藏起来。除了更精确的模块划分和可见性控制外，引入OSGi的另外一个重要理由是，基于OSGi的程序很可能可以实现模块级的热插拔功能，当程序升级更新或调试除错时，可以只停用、重新安装然后启动程序的其中一部分，这对企业级程序开发来说是一个非常有诱惑性的特性
+
+　　OSGi之所以能有上述“诱人”的特点，要归功于它灵活的类加载器架构。OSGi的Bundle类加载器之间只有规则，没有固定的委派关系。例如，某个Bundle声明了一个它依赖的Package，如果有其他的Bundle声明发布了这个Package，那么所有对这个Package的类加载动作都会为派给发布他的Bundle类加载器去完成。不涉及某个具体的Package时，各个Bundle加载器是平级关系，只有具体使用某个Package和Class的时候，才会根据Package导入导出定义来构造Bundle间的委派和依赖
+
+　　另外，一个Bundle类加载器为其他Bundle提供服务时，会根据Export-Package列表严格控制访问范围。如果一个类存在于Bundle的类库中但是没有被Export，那么这个Bundle的类加载器能找到这个类，但不会提供给其他Bundle使用，而且OSGi平台也不会把其他Bundle的类加载请求分配给这个Bundle来处理。
+  
+  OSGi类加载时的查找规则如下：
+
+　　　　1）以java.*开头的类，委派给父类加载器加载
+
+　　　　2）否则，委派列表名单内的类，委派给父类加载器加载
+
+　　　　3）否则，Import列表中的类，委派给Export这个类的Bundle的类加载器加载
+
+　　　　4）否则，查找当前Bundle的ClassPath，使用自己的类加载器加载
+
+　　　　5）否则，查找是否在自己的Fragment Bundle中，如果是，则委派给Fragment bundle的类加载器加载
+
+　　　　6）否则，查找Dynamic Import列表的Bundle，委派给对应Bundle的类加载器加载
+
+　　　　7）否则，查找失败
+
+　　从之前的图可以看出，在OSGi里面，加载器的关系不再是双亲委派模型的树形架构，而是已经进一步发展成了一种更复杂的、运行时才能确定的网状结构。
+
 ### 自定义类加载器
 通常情况下，我们都是直接使用系统类加载器。但是，有的时候，我们也需要自定义类加载器。比如应用是通过网络来传输 Java 类的字节码，为保证安全性，这些字节码经过了加密处理，这时系统类加载器就无法对其进行加载，这样则需要自定义类加载器来实现。自定义类加载器一般都是继承自 ClassLoader 类，从上面对 loadClass 方法来分析来看，我们只需要重写 findClass 方法即可。下面我们通过一个示例来演示自定义类加载器的流程：
 
@@ -825,6 +881,12 @@ http://www.importnew.com/16799.html
 https://blog.csdn.net/yangcheng33/article/details/52631940
 
 https://segmentfault.com/a/1190000013504913
+
+https://blog.csdn.net/vking_wang/article/details/12379333
+
+http://www.javafxchina.net/blog/2016/07/osgi-00-what/
+
+https://blog.csdn.net/lovebuzhidao/article/details/80326698
 
 ### 疑问
 https://gitbook.cn/gitchat/activity/5a751b1391d6b7067048a213
