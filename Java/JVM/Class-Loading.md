@@ -606,6 +606,86 @@ Thread.currentThread().getContextClassLoader();
 ```
 来获取想要的类加载器。 
 
+#### Tomcat 7 的类加载机制
+java web中的热部署，指的是热部署是在不重启 Java 虚拟机的前提下，能自动侦测到 class 文件的变化，更新运行时 class 的行为。在编写java程序的时候，每一次改动源代码，就必须重启一次应用程序，那java的这个缺陷是由什么导致的呢？
+
+java类只能由类加载器加载一次，这样在改动代码后，如果不重启就不能被重新加载。
+java类一般被系统自带的appclassloader 来加载。
+然而热部署对于开发来说实在太重要了，想想当你调试js代码的时候，一个屏幕源代码，一个屏幕浏览器，随时随地的观察代码带来的变化。而java对于这一点，由于它语言的特性导致很难做到这一点。 
+如果想要实现热部署，需要做哪些工作呢？
+
+销毁ClassLoader
+创建新的ClassLoader去加载更新后的class类文件。
+第一步销毁ClassLoader，如果要做到这一步，那么这个类文件一定不能是appclassloader加载的，因此要自定义ClassLoader。 
+第二步，要做到的话，首先必须有一个监听器去监听类发生变化，然后才能相应的创建ClassLoader去加载。 
+这也是Tomcat服务器在处理类加载的时候进行的做法，每一个web应用都有一个相应的类加载器。原理图如下： 
+![4bfd2e34-b46f-35fc-bc60-054010f2a980](https://user-images.githubusercontent.com/6982311/44792895-83104500-abd7-11e8-8dac-335ec0473c86.jpg)
+
+* Bootstrap 
+
+这个类加载器包含Java虚拟机提供的基本运行时类，以及来自System Extensions目录 
+（$JAVA_HOME/jre/lib/ext）中的JAR文件的所有类。注意：有些JVM可能将其实现为多个类加载器，比如HotSpot就分为启动类加载器（Bootstrap ClassLoader）和扩展类加载器（Extension ClassLoader）。
+
+* System 
+
+这个类加载器通常是通过CLASSPATH环境变量的内容初始化的。 所有这些类对于Tomcat和Web应用程序都是可见的。但是，标准Tomcat启动脚本（$CATALINA_HOME/bin/catalina.sh或％CATALINA_HOME％\bin\catalina.bat）完全忽略了CLASSPATH环境变量本身的内容，而是从以下存储库（repositories）构建System类加载器:
+
+1.$CATALINA_HOME/bin/bootstrap.jar：包含用于初始化Tomcat服务器的main()方法以及它所依赖的类加载器实现类。
+
+2.$CATALINA_BASE/bin/tomcat-juli.jar或者$CATALINA_HOME/bin/tomcat-juli.jar：日志实现类。其中包括称为Tomcat JULI的java.util.loggingAPI的增强类以及由Tomcat内部使用的ApacheCommons Logging库的软件包重命名副本。
+
+* Common
+
+这个类加载器包含了对Tomcat内部类和所有Web应用程序都可见的其他类。通常，应用程序类别不应放置在此处。这个类加载器搜索的位置由$CATALINA_BASE/conf/catalina.properties中的common.loader属性定义。默认设置将按照它们列出的顺序搜索以下位置：
+
+1.$CATALINA_BASE/lib下没打包的classes和资源文件
+
+2.$CATALINA_BASE/lib下的jar
+
+3.$CATALINA_HOME/lib下没打包的classes和资源文件
+
+4.$CATALINA_HOME/lib下的jar
+
+* WebappX 为每个部署在单个Tomcat实例中的Web应用程序创建类加载器。
+
+Web应用程序的/WEB-INF/classes目录中的所有未打包的类和资源，以及Web应用程序的/WEB-INF/lib目录下的JAR文件中的类和资源都可以被此Web应用程序访问，但不能访问到其他的。
+
+如上所述，Web应用程序类加载器与默认的Java委托模型不同(即双亲委派)。当处理从Web应用程序的WebappX类加载器加载类的请求时，该类加载器将首先在本地存储库中查找，而不是在查找之前进行委托。 但是有例外，作为JRE基类的一部分的类不能被覆盖。例如J2SE 1.4+中的XML解析器组件，以及Java 8将会使用的类。最后，包含Servlet API类的任何JAR文件将被类加载器显式忽略 - 你的Web应用程序中不应该包含这些类。 Tomcat中的所有其他类加载器都遵循通常的代理模式。
+
+因此，从Web应用程序的角度来看，类或资源加载按以下顺序在以下存储库中查找：
+
+Bootstrap classes of your JVM
+
+web应用的/WEB-INF/classes
+
+web应用的/WEB-INF/lib/*.jar
+
+System class loader classes (如上所述)
+
+Common class loader classes (如上所述)
+
+如果Web应用程序类加载器配置为<Loader delegate ="true"/>，那么顺序将变为：
+
+Bootstrap classes of your JVM
+
+System class loader classes (如上所述)
+
+Common class loader classes (如上所述)
+
+web应用的/WEB-INF/classes
+
+web应用的/WEB-INF/lib/*.jar
+
+并且Tomcat自定义的类加载器并不遵循双亲委派模型，而是先检查自身可不可以加载这个类，而不是先委派。前面也提到了，BootStrap，System和Common 这三个类加载器遵守委派模型同时加载java以及tomcat本身的核心类库。这样做的好处是更好的实现了应用的隔离，但是坏处就是加大了内存浪费，同样的类库要在不同的app中都要加载一份。（当然可以配置使得不是所有的app都要被加载，默认是全部加载） 
+Tomcat中当类发生改变时，监听器监听到触发StandardContext.reload()，然后销毁以前的类加载器，重新创造一个类加载器。 
+
+在使用idea开发的时候，可以在debug模式下，配置下图两个地方： 
+![20171031205419560](https://user-images.githubusercontent.com/6982311/44792924-958a7e80-abd7-11e8-9070-a6879600b173.jpg)
+
+就可以实现方法层面的修改，即你修改了方法中的代码，不需要tomcat重新发布，也不需要重启服务器。就可以实现热部署了。
+
+这是因为jdk1.6增加了agentmain方式，实现了运行时动态性（通过The Attach API 绑定到具体VM）。其基本实现是通过JVMTI的retransformClass/redefineClass进行method body级的字节码更新，ASM、CGLib之类基本都是围绕这些在做动态性。
+
 ### 自定义类加载器
 通常情况下，我们都是直接使用系统类加载器。但是，有的时候，我们也需要自定义类加载器。比如应用是通过网络来传输 Java 类的字节码，为保证安全性，这些字节码经过了加密处理，这时系统类加载器就无法对其进行加载，这样则需要自定义类加载器来实现。自定义类加载器一般都是继承自 ClassLoader 类，从上面对 loadClass 方法来分析来看，我们只需要重写 findClass 方法即可。下面我们通过一个示例来演示自定义类加载器的流程：
 
