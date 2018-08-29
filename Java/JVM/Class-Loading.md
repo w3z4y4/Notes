@@ -619,6 +619,7 @@ java类一般被系统自带的appclassloader 来加载。
 第一步销毁ClassLoader，如果要做到这一步，那么这个类文件一定不能是appclassloader加载的，因此要自定义ClassLoader。 
 第二步，要做到的话，首先必须有一个监听器去监听类发生变化，然后才能相应的创建ClassLoader去加载。 
 这也是Tomcat服务器在处理类加载的时候进行的做法，每一个web应用都有一个相应的类加载器。原理图如下： 
+
 ![4bfd2e34-b46f-35fc-bc60-054010f2a980](https://user-images.githubusercontent.com/6982311/44792895-83104500-abd7-11e8-8dac-335ec0473c86.jpg)
 
 * Bootstrap 
@@ -680,6 +681,7 @@ web应用的/WEB-INF/lib/*.jar
 Tomcat中当类发生改变时，监听器监听到触发StandardContext.reload()，然后销毁以前的类加载器，重新创造一个类加载器。 
 
 在使用idea开发的时候，可以在debug模式下，配置下图两个地方： 
+
 ![20171031205419560](https://user-images.githubusercontent.com/6982311/44792924-958a7e80-abd7-11e8-9070-a6879600b173.jpg)
 
 就可以实现方法层面的修改，即你修改了方法中的代码，不需要tomcat重新发布，也不需要重启服务器。就可以实现热部署了。
@@ -822,9 +824,10 @@ http://www.importnew.com/16799.html
 
 https://blog.csdn.net/yangcheng33/article/details/52631940
 
+https://segmentfault.com/a/1190000013504913
+
 ### 疑问
 https://gitbook.cn/gitchat/activity/5a751b1391d6b7067048a213
 
 * 与线程相关类加载器
-* Tomcat 框架中多级类加载器的实现原理
-* 如何使用类加载器实现简单的模块间隔离
+* 如何使用类加载器实现简单的模块间隔离，阿里的类隔离是如何做的
