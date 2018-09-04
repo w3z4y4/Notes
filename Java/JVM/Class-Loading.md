@@ -509,6 +509,8 @@ http://www.javafxchina.net/blog/2016/07/osgi-00-what/
 
 https://blog.csdn.net/lovebuzhidao/article/details/80326698
 
+https://www.cnblogs.com/wxd0108/p/6681618.html
+
 ### 疑问
 https://gitbook.cn/gitchat/activity/5a751b1391d6b7067048a213
 
