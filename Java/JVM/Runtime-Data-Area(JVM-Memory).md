@@ -9,3 +9,4 @@
 2.如果正在执行的是Native 方法，则这个技术器值为空（Undefined）
 
 3.此内存区域是唯一一个在Java虚拟机规范中没有规定任何OutOfMemoryError情况的区域
+
