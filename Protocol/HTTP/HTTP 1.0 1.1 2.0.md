@@ -54,7 +54,7 @@ B：还不错，挺好吃的。
 
 持久连接，即一个TCP连接服务多次请求：
 
-客户端在请求header中携带Connection: Keep-Alive，即是在向服务端请求持久连接。如果服务端接受持久连接，则会在响应header中同样携带Connection: Keep-Alive，这样客户端便会继续使用同一个TCP连接发送接下来的若干请求。（Keep-Alive的默认参数是[timout=5, max=100]，即一个TCP连接可以服务至多5秒内的100次请求）
+客户端在请求header中携带Connection: Keep-Alive，即是在向服务端请求持久连接。如果服务端接受持久连接，则会在响应header中同样携带Connection: Keep-Alive，这样客户端便会继续使用同一个TCP连接发送接下来的若干请求。（Keep-Alive的默认参数是[timout=5, max=100]，timeout表示一个响应结束后，再过5s没有请求就断开。max表示TCP连接内可连续发送的最大请求数。）
 
 当服务端主动切断一个持久连接时（或服务端不支持持久连接），则会在header中携带Connection: Close，要求客户端停止使用这一连接。
 
