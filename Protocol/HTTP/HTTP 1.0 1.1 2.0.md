@@ -66,7 +66,7 @@ HTTP/1.1开始，即使请求header中没有携带Connection: Keep-Alive，传�
 
 ![v2-d254b4a421391fc3c2178ffbc0b023a1_hd](https://user-images.githubusercontent.com/6982311/45009568-6f336b80-b03b-11e8-9582-763798e44603.png)
 
-然而pipelining并没有彻底解决HOLB（线头阻塞（Head of line blocking）简称：HOLB），为了让同一个连接中的多个响应能够和多个请求匹配上，响应仍然是按请求的顺序串行返回的。所以pipelining并没有被广泛接受，几乎所有代理服务都不支持pipelining，部分浏览器不支持pipelining，支持的大部分也会将其默认关闭。
+然而pipelining并没有彻底解决HOLB（线头阻塞（Head of line blocking）简称：HOLB），为了让同一个连接中的多个响应能够和多个请求匹配上，响应仍然是按请求的顺序串行返回的。同理，pipelining还有请求的Front of queue blocking问题。所以pipelining并没有被广泛接受，几乎所有代理服务都不支持pipelining，部分浏览器不支持pipelining，支持的大部分也会将其默认关闭。
 
 SPDY和HTTP/2：multiplexing
 
