@@ -133,3 +133,51 @@ public class JavaVMStackSOF {
 如 System.currentTimeMillis(); public static native long currentTimeMillis(); 此获取当前毫秒就是native方法。
 
 与虚拟机栈一样，本地方法栈区域也回会抛出StackOverflowError 和 OutOfMemoryError异常。
+
+### 堆（Heap）
+对于大多数应用来说，Java 堆 是Java 虚拟机所管理的的内存中最大的一块，此内存区域的唯一目的就是存放对象实例，几乎所有的对象实例都在这里分配内存。在Java 虚拟机规范中的描述是：所有的对象以及数组都要在堆上分配，但是随着JIT编译器的发展与逃逸分析技术逐渐成熟，栈上分配、标量替换优化技术将会导致一些微妙的变化发生，所有的对象都分配在堆上也就不那么绝对了。
+
+简单理解就是，在堆上的大部分对象都会在发生GC 时被回收释放内存，但GC 同样是需要耗费资源，那如果确定一个对象只在一个方法区内出现，不存在逃逸现象，则可以考虑将此对象创建在栈上，随着方法的执行完成而回收对象的空间也就优化了GC的负担。但就我们常见的HotSpot 虚拟机来说目前没有这种机制，不存在在栈上创建对象的情况。
+
+Java 堆是垃圾收集器管理的主要区域，从内存回收的角度来看，由于现在收集器基本都采用分代收集算法，所以Java堆中还可以细分为：新生代和老年代；新生代中还可以分为Eden空间、From Survivor空间、To Survivor空间。它们比例默认是 8：1：1 。
+
+![20180115165503456](https://user-images.githubusercontent.com/6982311/45586121-d1d21480-b923-11e8-82f6-9783e8a6f8fb.png)
+
+如果在堆中没有内存完成实例分配，并且堆也无法再扩展时，将会抛出OutOfMemoryError异常。
+
+异常示例:
+```java
+package com.xnccs.cn.share;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * 堆溢出测试
+ * 
+ * VM: -Xms20m -Xmx20m
+ * @author j_nan
+ *
+ */
+public class HeapOOM {
+
+    static class OOMObject{
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        List<OOMObject> list = new ArrayList<OOMObject>();
+        while(true){
+            try{
+                list.add(new OOMObject());
+            }catch(Throwable e){
+                System.out.println("集合中对象数量是:"+list.size());
+                throw e;
+            }
+        }
+
+    }
+}
+```
+
+
+
