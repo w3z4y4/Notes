@@ -127,3 +127,9 @@ public class JavaVMStackSOF {
 
 在Java中，堆内存是用来存储实例的。比如main函数里面声明了一个people的类per，people per；这个per是存储在栈stack内存中的，实例化后（per = new people（））；实例后的对象实体是存在堆heap内存中的。栈stack内存中存储的per存储着指向堆heap内存的地址指向。堆heap内存的存在是为了更好的管理内存，实现garbage collection。当per不再指向堆heap内存中的实例的时候，garbage collection机制就会把这个堆heap内存中的new people（）实例删除，释放内存。
 
+### 本地方法栈（Native Method Stack）
+本地方法栈与虚拟机栈所发挥的作用是非常相似的，它们之前的区别不过是虚拟机栈为虚拟机执行Java方法（也就是字节码）服务，而本地方法栈则为虚拟机使用到的native 方法服务。
+
+如 System.currentTimeMillis(); public static native long currentTimeMillis(); 此获取当前毫秒就是native方法。
+
+与虚拟机栈一样，本地方法栈区域也回会抛出StackOverflowError 和 OutOfMemoryError异常。
