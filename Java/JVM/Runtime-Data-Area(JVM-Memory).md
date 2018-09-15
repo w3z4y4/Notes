@@ -73,13 +73,53 @@ Java线程总是需要以某种形式映射到OS线程上。映射模型可以�
 
 ![20180115154642718](https://user-images.githubusercontent.com/6982311/45546924-80f1eb80-b851-11e8-979b-a4dec2e01382.png)
 
-* 问题：StackOverFlowError和OutOfMemoryError的区别？
+* 问题：两种栈溢出的区别：StackOverFlowError和OutOfMemoryError？
+
+前者一般是因为方法递归没终止条件，后者一般是方法中线程启动过多。
 
 在《java虚拟机规范中文版》第二章第五节中有这么几句话：    
 
 1.如果线程请求分配的栈容量超过java虚拟机栈允许的最大容量的时候，java虚拟机将抛出一个StackOverFlowError异常。    
 
 2.如果java虚拟机栈可以动态拓展(当前大部分Java虚拟机都可动态扩展，只不过Java虚拟机规范中也允许固定长度的虚拟机栈)，并且扩展的动作已经尝试过，但是目前无法申请到足够的内存去完成拓展，或者在建立新线程的时候没有足够的内存去创建对应的虚拟机栈，那java虚拟机将会抛出一个OutOfMemoryError异常。
+
+StackOverFlowError示例：
+```java
+/**
+ * 栈溢出测试
+ * 
+ * VM : -Xss128k  栈内存容量
+ * @author j_nan
+ *
+ */
+public class JavaVMStackSOF {
+
+    private int stackLength = 1;
+
+
+    public void stackLeak(){
+        stackLength ++;
+        stackLeak();
+    }
+
+
+    public static void main(String[] args) {
+        JavaVMStackSOF oom = new JavaVMStackSOF();
+        try{
+            oom.stackLeak();
+        }catch(Throwable e){
+            System.out.println("stack length:" + oom.stackLength);
+            throw e;
+        }
+    }
+}
+```
+
+输出：
+
+![20180115151728460](https://user-images.githubusercontent.com/6982311/45551241-d46b3600-b85f-11e8-83d5-f56f9dbe65e8.jpg)
+
+并且方法的参数越多，栈帧的局部变量表所需的内存空间越大，栈深越小。
 
 * 问题：JVM为什么要分堆和栈？
 
