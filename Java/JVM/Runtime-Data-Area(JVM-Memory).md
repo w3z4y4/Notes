@@ -179,5 +179,17 @@ public class HeapOOM {
 }
 ```
 
+### 方法区（Method Area）
+这也是所有线程共享的一块内存区域，用于存储所谓的元（Meta）数据，例如类结构信息，以及对应的运行时常量池、字段、方法代码等。
+
+由于早期的 Hotspot JVM 实现，很多人习惯于将方法区称为永久代（Permanent Generation）。Oracle JDK 8 中将永久代移除，同时增加了元数据区（Metaspace）。
+
+### 参考资料
+官方jvm文档非常好：
+
+https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.5.4
+
+
+
 
 
