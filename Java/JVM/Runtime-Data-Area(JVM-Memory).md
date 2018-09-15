@@ -3,7 +3,7 @@
 
 ![jvmspec7](https://user-images.githubusercontent.com/6982311/45546348-9c5bf700-b84f-11e8-91c4-c6ef544601c4.png)
 
-![20180119092157123](https://user-images.githubusercontent.com/6982311/45545403-b9db9180-b84c-11e8-8117-c912acca5ca6.png)
+![20180115160639802](https://user-images.githubusercontent.com/6982311/45585841-1fe41980-b91e-11e8-8dfd-d9fdb1940e35.png)
 
 ### 程序计数器(Program Counter Register)
 程序计数器是一块较小的内存空间，它的作用可以看作是当前线程所执行的字节码的行号指示器。在虚拟机的概念模型里字节码解释器工作时就是通过改变这个计数器的值来选取下一条需要执行的字节码指令，分支、循环、跳转、异常处理、线程恢复等基础功能都需要依赖这个计数器来完成。- - 摘自《深入理解Java虚拟机》
