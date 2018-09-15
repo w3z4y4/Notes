@@ -184,6 +184,20 @@ public class HeapOOM {
 
 由于早期的 Hotspot JVM 实现，很多人习惯于将方法区称为永久代（Permanent Generation）。Oracle JDK 8 中将永久代移除，同时增加了元数据区（Metaspace）。
 
+方法区逻辑上属于堆的一部分，但是为了与堆进行区分，通常又叫“非堆”。
+
+元空间（Metaspace）的本质和永久代类似，都是对JVM规范中方法区的实现。不过元空间与永久代之间最大的区别在于：元空间并不在虚拟机中，而是使用本地内存。理论上取决于32位/64位系统可虚拟的内存大小。可见也不是无限制的，需要配置参数。‑XX:MaxPermSize 参数失去了意义，取而代之的是-XX:MaxMetaspaceSize。
+
+### 运行时常量池（Run-Time Constant Pool）
+A run-time constant pool is a per-class or per-interface run-time representation of the constant_pool table in a class file (§4.4). It contains several kinds of constants, ranging from numeric literals known at compile-time to method and field references that must be resolved at run-time. The run-time constant pool serves a function similar to that of a symbol table for a conventional programming language, although it contains a wider range of data than a typical symbol table.
+
+Each run-time constant pool is allocated from the Java Virtual Machine's method area (§2.5.4). The run-time constant pool for a class or interface is constructed when the class or interface is created (§5.3) by the Java Virtual Machine.
+
+The following exceptional condition is associated with the construction of the run-time constant pool for a class or interface:
+
+* When creating a class or interface, if the construction of the run-time constant pool requires more memory than can be made available in the method area of the Java Virtual Machine, the Java Virtual Machine throws an OutOfMemoryError.
+
+
 ### 参考资料
 官方jvm文档非常好：
 
