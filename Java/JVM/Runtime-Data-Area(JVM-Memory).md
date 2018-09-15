@@ -187,11 +187,13 @@ public class HeapOOM {
 
 
 ### 方法区（Method Area）
-这也是所有线程共享的一块内存区域，用于存储所谓的元（Meta）数据，例如类结构信息，以及对应的运行时常量池、字段、方法代码、JIT编译后的代码等数据。
+这也是所有线程共享的一块内存区域，用于存储所谓的元（Meta）数据，例如类结构信息，以及对应的运行时常量池、字段、方法代码、JIT编译后的代码等数据。如，当程序中通过getName、isInterface等方法来获取信息时，这些数据来源于方法区。
 
 由于早期的 Hotspot JVM 实现，很多人习惯于将方法区称为永久代（Permanent Generation）。Oracle JDK 8 中将永久代移除，同时增加了元数据区（Metaspace）。
 
 方法区逻辑上属于堆的一部分，但是为了与堆进行区分，通常又叫“非堆”。
+
+由于使用反射机制的原因，虚拟机很难推测哪个类信息不再使用，因此这块区域的回收很难！另外，对这块区域主要是针对常量池回收，值得注意的是JDK1.7已经把常量池转移到堆里面了。
 
 元空间（Metaspace）的本质和永久代类似，都是对JVM规范中方法区的实现。不过元空间与永久代之间最大的区别在于：元空间并不在虚拟机中，而是使用本地内存。理论上取决于32位/64位系统可虚拟的内存大小。可见也不是无限制的，需要配置参数。‑XX:MaxPermSize 参数失去了意义，取而代之的是-XX:MaxMetaspaceSize。
 
@@ -205,7 +207,8 @@ The following exceptional condition is associated with the construction of the r
 * When creating a class or interface, if the construction of the run-time constant pool requires more memory than can be made available in the method area of the Java Virtual Machine, the Java Virtual Machine throws an OutOfMemoryError.
 
 啰嗦：
-具备动态性，非预置入Class文件常量池的新常量也可能在运行期间放入池中（利用的比较多的是String的intern()）
+* 其空间从方法区域（JDK1.7后为堆空间）中分配。
+* 具备动态性，非预置入Class文件常量池的新常量也可能在运行期间放入池中（利用的比较多的是String的intern()）
 
 ### 问题
 #### 什么是直接内存（Directed Memory）？
@@ -226,6 +229,8 @@ JVM 本身是个本地程序，还需要其他的内存去完成各种基本任�
 
 如果-Xmx 8G，那么方法区不在其中。但是永久代/方法区也属于GC Heap的一部分。另外，方法区（method area）只是JVM规范中定义的一个概念，用于存储类信息、常量池、静态变量、JIT编译后的代码等数据，具体放在哪里，不同的实现可以放在不同的地方。而永久代是Hotspot虚拟机特有的概念，是方法区的一种实现，别的JVM都没有这个东西。在Java 6中，方法区中包含的数据，除了JIT编译生成的代码存放在native memory的CodeCache区域，其他都存放在永久代；在Java 7中，Symbol的存储从PermGen移动到了native memory，并且把静态变量从instanceKlass末尾（位于PermGen内）移动到了java.lang.Class对象的末尾（位于普通Java heap内）；在Java 8中，永久代被彻底移除，取而代之的是另一块与堆不相连的本地内存——元空间（Metaspace）,‑XX:MaxPermSize 参数失去了意义，取而代之的是-XX:MaxMetaspaceSize。
 
+#### Intern方法的奥秘？
+在<深入理解Java虚拟机>一书中解释道: ‘String.intern()是一个Native方法,它的作用是:如果字符常量池中已经包含一个等于此String对象的字符串,则返回常量池中字符串的引用,否则,将新的字符串放入常量池,并返回新字符串的引用’，不同版本的JAVA虚拟机对此方法的实现可能不同。
 
 ### 参考资料
 官方jvm文档非常好：
