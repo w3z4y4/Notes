@@ -179,6 +179,13 @@ public class HeapOOM {
 }
 ```
 
+啰嗦：
+* JVM规范中的描述是Java堆包含数组（Arrays）和对象实例（Class Instances）。不过随着技术的发展这也不一定了。
+* 可处于物理上不连续的内存空间，保证逻辑上连续即可。
+* 主流VM中都按可扩展容量实现（通过-Xmx和-Xms控制）。如果在堆中没有内存完成实例分配，并且堆也无法再扩展时，会抛出OutOfMemoryError。
+
+
+
 ### 方法区（Method Area）
 这也是所有线程共享的一块内存区域，用于存储所谓的元（Meta）数据，例如类结构信息，以及对应的运行时常量池、字段、方法代码、JIT编译后的代码等数据。
 
@@ -196,6 +203,28 @@ Each run-time constant pool is allocated from the Java Virtual Machine's method 
 The following exceptional condition is associated with the construction of the run-time constant pool for a class or interface:
 
 * When creating a class or interface, if the construction of the run-time constant pool requires more memory than can be made available in the method area of the Java Virtual Machine, the Java Virtual Machine throws an OutOfMemoryError.
+
+啰嗦：
+具备动态性，非预置入Class文件常量池的新常量也可能在运行期间放入池中（利用的比较多的是String的intern()）
+
+### 问题
+#### 什么是直接内存（Directed Memory）？
+不是运行时数据区的一部分，也不是规范中定义的内存区域。不过也会导致OutOfMemoryError。
+
+JDK1.4中加入的NIO（New Input/Output）类引入一种基于Channel和Buffer的I/O方式，可以使用Native函数库直接分配堆外内存，然后通过一个存在Java堆中的DirectByteBuffer对象作为这块内存的引用进行操作，在一些场景可以提升性能，因为避免了在Java堆和Native堆中来回复制数据。
+
+不受Java堆大小的限制，受本机总内存和处理器寻址空间的限制。
+
+可能出现OOM的情况：设置的-Xmx等各个内存区域总和大于物理内存限制，导致动态扩展中出现OOM Error。
+
+DirectMemory导致的内存溢出在Heap Dump文件中不会看见明显的异常。若OOM后Dump文件很小，同时程序中直接或间接地使用了NIO，即可考虑堆外内存溢出。
+
+啰嗦：
+JVM 本身是个本地程序，还需要其他的内存去完成各种基本任务，比如，JIT Compiler 在运行时对热点方法进行编译，就会将编译后的方法储存在 Code Cache 里面；GC 等功能需要运行在本地线程之中，类似部分都需要占用内存空间。这些是实现 JVM JIT 等功能的需要，但规范中并不涉及。
+
+#### 如果-Xmx 8G，那么这个8G包括方法区吗？
+
+如果-Xmx 8G，那么方法区不在其中。但是永久代/方法区也属于GC Heap的一部分。另外，方法区（method area）只是JVM规范中定义的一个概念，用于存储类信息、常量池、静态变量、JIT编译后的代码等数据，具体放在哪里，不同的实现可以放在不同的地方。而永久代是Hotspot虚拟机特有的概念，是方法区的一种实现，别的JVM都没有这个东西。在Java 6中，方法区中包含的数据，除了JIT编译生成的代码存放在native memory的CodeCache区域，其他都存放在永久代；在Java 7中，Symbol的存储从PermGen移动到了native memory，并且把静态变量从instanceKlass末尾（位于PermGen内）移动到了java.lang.Class对象的末尾（位于普通Java heap内）；在Java 8中，永久代被彻底移除，取而代之的是另一块与堆不相连的本地内存——元空间（Metaspace）,‑XX:MaxPermSize 参数失去了意义，取而代之的是-XX:MaxMetaspaceSize。
 
 
 ### 参考资料
