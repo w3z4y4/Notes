@@ -1,8 +1,6 @@
 ## JVM 运行时数据结构---20180910
 虚拟机在执行java 程序的过程中会把它所管理的内存划分为若干不同的数据区域，这些区域都有各自的用途，以及创建和销毁的时间。有的区域随着虚拟机进程（方法区、堆）的启动而存在，有些区域则依赖线程的启动和结束而建立和销毁（程序计数器、虚拟机栈、本地方法栈）。
 
-![jvmspec7](https://user-images.githubusercontent.com/6982311/45546348-9c5bf700-b84f-11e8-91c4-c6ef544601c4.png)
-
 ![20180115160639802](https://user-images.githubusercontent.com/6982311/45585841-1fe41980-b91e-11e8-8dfd-d9fdb1940e35.png)
 
 ### 程序计数器(Program Counter Register)
