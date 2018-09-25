@@ -230,7 +230,22 @@ JVM 本身是个本地程序，还需要其他的内存去完成各种基本任�
 #### Intern方法的奥秘？
 在<深入理解Java虚拟机>一书中解释道: ‘String.intern()是一个Native方法,它的作用是:如果字符常量池中已经包含一个等于此String对象的字符串,则返回常量池中字符串的引用,否则,将新的字符串放入常量池,并返回新字符串的引用’，不同版本的JAVA虚拟机对此方法的实现可能不同。
 
-但是呢，JDK 7 以后，HotSpot 已将常量池从永久代转移到了堆中。也就是说，从JDK 1.7后，HotSpot 将常量池从永久代移到了元空间，正因为如此，JDK 1.7 后的intern方法在实现上发生了比较大的改变，JDK 1.7后，intern方法还是会先去查询常量池中是否有已经存在，如果存在，则返回常量池中的引用，这一点与之前没有区别，区别在于，如果在常量池找不到对应的字符串，则不会再将字符串拷贝到常量池，而只是在常量池中生成一个对原字符串的引用。
+但是呢，JDK 7 以后，HotSpot 已将常量池从永久代转移到了堆中。看例子：
+```java
+/**String.intern()返回引用的测试**/
+public class RuntimeConstantPoolOOM {
+
+    public static void main(String[] args) {
+        String str1 = new StringBuilder("computer").append("software").toString();
+        System.out.println(str1.intern() == str1);
+
+        String str2 = new StringBuilder("ja").append("va").toString();
+        System.out.println(str2.intern() == str2); // str2.intern()并不会修改str2的值
+    }
+}
+```
+
+在JDK1.6中会得到两个false，在JDK1.7中会得到一个true和一个false。因为JDK1.6中会把首次遇到的String实例复制到常量池中，返回的也是常量池中该实例的引用，与StringBuilder创建的在堆上的对象不是同一个引用；而JDK1.7开始的intern()不再复制实例，而是在常量池中记录首次出现的实例的引用并返回该引用，故指向的是同一个实例。对str2返回false是因为"java"这个字符串在执行StringBuilder.toString()之前已经出现过并存在常量池中了[3]，所以返回的是之前存在的实例的引用。
 
 Intern的好处是可以节约内存（String对象数量少），但每次都要去常量池查一把，程序运行时间较慢，但是网上说回收对象的GC所占用的时间是要大于这个时间的。
 
