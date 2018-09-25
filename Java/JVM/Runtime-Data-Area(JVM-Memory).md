@@ -245,7 +245,7 @@ public class RuntimeConstantPoolOOM {
 }
 ```
 
-在JDK1.6中会得到两个false，在JDK1.7中会得到一个true和一个false。因为JDK1.6中会把首次遇到的String实例复制到常量池中，返回的也是常量池中该实例的引用，与StringBuilder创建的在堆上的对象不是同一个引用；而JDK1.7开始的intern()不再复制实例，而是在常量池中记录首次出现的实例的引用并返回该引用，故指向的是同一个实例。对str2返回false是因为"java"这个字符串在执行StringBuilder.toString()之前已经出现过并存在常量池中了[3]，所以返回的是之前存在的实例的引用。
+在JDK1.6中会得到两个false，在JDK1.7中会得到一个true和一个false。因为JDK1.6中会把首次遇到的String实例复制到常量池中，返回的也是常量池中该实例的引用，与StringBuilder创建的在堆上的对象不是同一个引用；而JDK1.7开始的intern()不再复制实例，而是在常量池中记录首次出现的实例的引用并返回该引用(猜测可能使用类似equals的方法比对)，故指向的是同一个实例。对str2返回false是因为"java"这个字符串在执行StringBuilder.toString()之前已经出现过并存在常量池中了[3]，所以返回的是之前存在的实例的引用。
 
 Intern的好处是可以节约内存（String对象数量少），但每次都要去常量池查一把，程序运行时间较慢，但是网上说回收对象的GC所占用的时间是要大于这个时间的。
 
