@@ -254,9 +254,11 @@ Intern的好处是可以节约内存（String对象数量少），但每次都�
 
 https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.5.4
 
-一篇不错的文章：
+其他文章：
 
-地址:https://qintongbaba.github.io/2017/08/03/JVM%E4%B9%8B%E8%BF%90%E8%A1%8C%E6%97%B6%E6%95%B0%E6%8D%AE%E5%8C%BA-Runtime-Data-Area/
+https://qintongbaba.github.io/2017/08/03/JVM%E4%B9%8B%E8%BF%90%E8%A1%8C%E6%97%B6%E6%95%B0%E6%8D%AE%E5%8C%BA-Runtime-Data-Area/
+
+https://www.jianshu.com/p/fcb3c28b19fe#fn2
 
 1、程序计数器
 
