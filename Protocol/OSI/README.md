@@ -1,1 +1,0 @@
-OSI（Open System Interconnection）
