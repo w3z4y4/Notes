@@ -1,1 +1,3 @@
 spring boot的启动过程
+一、从SpringApplication.run说起
+静态方法，一般是传入主类的类名和应用的启动参数，然后创建SpringApplication的实例，再调用这个实例的run方法，入参是应用的启动参数。
