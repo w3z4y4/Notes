@@ -11,3 +11,6 @@ spring boot的启动过程
 默认加载EventPublishingRunListener，SpringBoot使用当前线程的类加载器去实例化这个类（ClassUtils.forName(name,classLoader)），自定义的Listerner也必须是SpringApplicationRunListener的子类.
 
 resolvetype
+
+
+2.
